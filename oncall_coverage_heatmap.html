@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Riverland Region — On-Call Period Response Demand</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:Arial,sans-serif; display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+#header { padding:10px 16px; background:#1a3a5c; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px; flex-shrink:0; }
+#header h1 { font-size:16px; color:#fff; }
+#header p  { font-size:11px; color:#aac4e0; margin-top:2px; }
+.btn { background:#0f3460; border:1px solid #aac4e0; color:#eee; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px; margin-left:4px; }
+.btn:hover { background:#2980b9; }
+.btn.active { background:#2980b9; border-color:#fff; }
+#body-row { display:flex; flex:1; overflow:hidden; }
+#map { flex:1; }
+#side-panel { width:275px; flex-shrink:0; background:#fff; border-left:1px solid #e0e0e0; overflow-y:auto; display:flex; flex-direction:column; }
+.sec { padding:11px 13px; border-bottom:2px solid #e8eef5; }
+.sec-title { font-size:10px; font-weight:bold; text-transform:uppercase; letter-spacing:0.6px; color:#1a3a5c; margin-bottom:8px; }
+.tot-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:6px; }
+.tot-box { background:#f0f5ff; border:1px solid #c0d4f0; border-radius:6px; padding:8px 4px; text-align:center; }
+.tot-box .v { font-size:19px; font-weight:bold; line-height:1; }
+.tot-box .l { font-size:10px; color:#888; margin-top:3px; }
+.tot-box.berri .v   { color:#e67e22; }
+.tot-box.renmark .v { color:#8e44ad; }
+.window-box { background:#f8f9fa; border-radius:6px; padding:8px 10px; margin-top:6px; font-size:11px; }
+.window-row { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #eee; }
+.window-row:last-child { border-bottom:none; }
+.wlabel { color:#555; }
+.wval { font-weight:bold; color:#1a3a5c; }
+/* Chart */
+.chart-subtitle { font-size:10px; color:#888; margin-bottom:6px; }
+.chart-container { display:flex; align-items:flex-end; gap:2px; height:85px; }
+.chart-bar-wrap { display:flex; flex-direction:column; align-items:center; flex:1; height:100%; justify-content:flex-end; position:relative; }
+.chart-bar { width:100%; border-radius:2px 2px 0 0; min-height:2px; cursor:default; }
+.chart-bar:hover .chart-tip { display:block; }
+.chart-tip { display:none; position:absolute; bottom:105%; left:50%; transform:translateX(-50%); background:#1a3a5c; color:#fff; font-size:9px; padding:2px 5px; border-radius:3px; white-space:nowrap; z-index:999; pointer-events:none; }
+.chart-xlabels { display:flex; gap:2px; margin-top:3px; }
+.chart-xlabel { flex:1; font-size:8px; color:#aaa; text-align:center; }
+.chart-xlabel.peak { color:#e74c3c; font-weight:bold; }
+/* Priority bars */
+.brow { display:flex; align-items:center; gap:4px; margin-top:3px; font-size:10px; }
+.blbl { width:20px; font-weight:bold; font-size:10px; }
+.blbl.be { color:#e67e22; } .blbl.rn { color:#8e44ad; }
+.bbg { flex:1; background:#f0f0f0; border-radius:3px; height:6px; }
+.bfill { height:6px; border-radius:3px; }
+.bval { width:32px; text-align:right; color:#666; }
+/* Suburb list */
+.sub-row { padding:5px 13px; border-bottom:1px solid #f5f5f5; cursor:pointer; }
+.sub-row:hover { background:#f0f5ff; }
+.sub-top { display:flex; justify-content:space-between; align-items:baseline; }
+.sub-name { font-size:11px; color:#333; font-weight:500; }
+.sub-pc { font-size:10px; color:#bbb; }
+.sub-tot { font-size:12px; font-weight:bold; color:#1a3a5c; }
+.sub-detail { font-size:10px; color:#aaa; margin-top:1px; }
+.sub-bar-bg { height:3px; background:#f0f0f0; border-radius:2px; margin-top:3px; }
+.sub-bar-fill { height:3px; border-radius:2px; }
+#legend-bar { padding:7px 16px; background:#1a3a5c; font-size:11px; color:#eee; display:flex; align-items:center; gap:10px; flex-wrap:wrap; flex-shrink:0; }
+.hgrad-berri   { width:90px; height:9px; border-radius:5px; background:linear-gradient(to right,rgba(255,200,0,0.4),rgba(255,120,0,0.8),rgba(200,60,0,1)); }
+.hgrad-renmark { width:90px; height:9px; border-radius:5px; background:linear-gradient(to right,rgba(200,80,255,0.4),rgba(140,30,200,0.8),rgba(70,0,120,1)); }
+.hgrad-both    { width:90px; height:9px; border-radius:5px; background:linear-gradient(to right,rgba(0,80,200,0.3),rgba(0,60,160,0.7),rgba(10,20,80,1)); }
+.legend-grad { display:none; align-items:center; gap:5px; }
+.legend-grad.active { display:flex; }
+</style>
+</head>
+<body>
+<div id="header">
+  <div>
+    <h1>🌙 Riverland Region — On-Call Period Response Demand</h1>
+    <p>Berri 1700–0700 &nbsp;·&nbsp; Renmark 1800–0800 &nbsp;·&nbsp; May 2023–Apr 2026</p>
+  </div>
+  <div>
+    <button class="btn active" id="btn-both"    onclick="setFilter('both')">Both</button>
+    <button class="btn"        id="btn-berri"   onclick="setFilter('berri')">Berri Window</button>
+    <button class="btn"        id="btn-renmark" onclick="setFilter('renmark')">Renmark Window</button>
+    <button class="btn"        id="btn-rings"   onclick="toggleRings()">Coverage Rings</button>
+  </div>
+</div>
+
+<div id="body-row">
+  <div id="map"></div>
+  <div id="side-panel">
+
+    <div class="sec">
+      <div class="sec-title">On-Call Window Totals (3 Years, P1–P8)</div>
+      <div class="tot-grid">
+        <div class="tot-box berri"><div class="v">3,917</div><div class="l">Berri (1700–0700)</div></div>
+        <div class="tot-box renmark"><div class="v">3,198</div><div class="l">Renmark (1800–0800)</div></div>
+      </div>
+      <div class="window-box">
+        <div class="window-row"><span class="wlabel">Combined P1–P8 jobs</span><span class="wval">7,115</span></div>
+        <div class="window-row"><span class="wlabel">Monthly avg (Berri)</span><span class="wval">108.8</span></div>
+        <div class="window-row"><span class="wlabel">Monthly avg (Renmark)</span><span class="wval">88.8</span></div>
+        <div class="window-row"><span class="wlabel">Per night avg (Berri)</span><span class="wval">3.57</span></div>
+        <div class="window-row"><span class="wlabel">Per night avg (Renmark)</span><span class="wval">2.91</span></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">Hourly Job Distribution</div>
+      <div class="chart-subtitle" id="chart-subtitle">Both windows combined · P1–P8</div>
+      <div class="chart-container" id="chart-bars"></div>
+      <div class="chart-xlabels"   id="chart-labels"></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">Priority Breakdown</div>
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:bold;color:#e67e22;margin-bottom:5px;">Berri (1700–0700) — 3,917 jobs</div>
+        <div class="brow"><span class="blbl be">P1</span><div class="bbg"><div class="bfill" style="width:6%;background:#c0392b"></div></div><span class="bval">100</span></div>
+        <div class="brow"><span class="blbl be">P2</span><div class="bbg"><div class="bfill" style="width:76%;background:#e74c3c"></div></div><span class="bval">1,315</span></div>
+        <div class="brow"><span class="blbl be">P3</span><div class="bbg"><div class="bfill" style="width:77%;background:#e67e22"></div></div><span class="bval">1,321</span></div>
+        <div class="brow"><span class="blbl be">P4</span><div class="bbg"><div class="bfill" style="width:12%;background:#f1c40f"></div></div><span class="bval">202</span></div>
+        <div class="brow"><span class="blbl be">P5</span><div class="bbg"><div class="bfill" style="width:33%;background:#2ecc71"></div></div><span class="bval">564</span></div>
+        <div class="brow"><span class="blbl be">P6</span><div class="bbg"><div class="bfill" style="width:2%;background:#1abc9c"></div></div><span class="bval">30</span></div>
+        <div class="brow"><span class="blbl be">P7</span><div class="bbg"><div class="bfill" style="width:6%;background:#3498db"></div></div><span class="bval">97</span></div>
+        <div class="brow"><span class="blbl be">P8</span><div class="bbg"><div class="bfill" style="width:17%;background:#9b59b6"></div></div><span class="bval">288</span></div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:bold;color:#8e44ad;margin-bottom:5px;">Renmark (1800–0800) — 3,198 jobs</div>
+        <div class="brow"><span class="blbl rn">P1</span><div class="bbg"><div class="bfill" style="width:5%;background:#c0392b"></div></div><span class="bval">80</span></div>
+        <div class="brow"><span class="blbl rn">P2</span><div class="bbg"><div class="bfill" style="width:82%;background:#e74c3c"></div></div><span class="bval">1,316</span></div>
+        <div class="brow"><span class="blbl rn">P3</span><div class="bbg"><div class="bfill" style="width:60%;background:#e67e22"></div></div><span class="bval">965</span></div>
+        <div class="brow"><span class="blbl rn">P4</span><div class="bbg"><div class="bfill" style="width:8%;background:#f1c40f"></div></div><span class="bval">128</span></div>
+        <div class="brow"><span class="blbl rn">P5</span><div class="bbg"><div class="bfill" style="width:32%;background:#2ecc71"></div></div><span class="bval">508</span></div>
+        <div class="brow"><span class="blbl rn">P6</span><div class="bbg"><div class="bfill" style="width:1%;background:#1abc9c"></div></div><span class="bval">10</span></div>
+        <div class="brow"><span class="blbl rn">P7</span><div class="bbg"><div class="bfill" style="width:3%;background:#3498db"></div></div><span class="bval">48</span></div>
+        <div class="brow"><span class="blbl rn">P8</span><div class="bbg"><div class="bfill" style="width:9%;background:#9b59b6"></div></div><span class="bval">143</span></div>
+      </div>
+    </div>
+
+    <div style="padding:8px 13px 4px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.6px;color:#1a3a5c;border-bottom:1px solid #eee;">
+      Jobs by Suburb — click to zoom
+    </div>
+    <div id="suburb-list"></div>
+  </div>
+</div>
+
+<div id="legend-bar">
+  <div class="legend-grad active" id="grad-both">
+    <span style="color:#aac4e0">Combined:</span>
+    <span style="color:#aac4e0;font-size:10px">Low</span><div class="hgrad-both"></div><span style="color:#aac4e0;font-size:10px">High</span>
+  </div>
+  <div class="legend-grad" id="grad-berri">
+    <div style="width:10px;height:10px;border-radius:50%;background:#e67e22;border:1px solid white;"></div>
+    <span>Berri:</span><span style="color:#aac4e0;font-size:10px">Low</span><div class="hgrad-berri"></div><span style="color:#aac4e0;font-size:10px">High</span>
+  </div>
+  <div class="legend-grad" id="grad-renmark">
+    <div style="width:10px;height:10px;border-radius:50%;background:#8e44ad;border:1px solid white;"></div>
+    <span>Renmark:</span><span style="color:#aac4e0;font-size:10px">Low</span><div class="hgrad-renmark"></div><span style="color:#aac4e0;font-size:10px">High</span>
+  </div>
+  <span style="margin-left:auto;color:#aac4e0;font-size:10px;">🔴 Station · Hover bars for counts · Click circles for suburb detail · Coords: ABS ASGS 2021</span>
+</div>
+
+<script>
+const suburbs = [
+  { name:'Berri',             lat:-34.27531, lng:140.6041,  pc:'5343', berri:1725, renmark:697  },
+  { name:'Renmark',           lat:-34.16292, lng:140.74997, pc:'5341', berri:459,  renmark:1333 },
+  { name:'Loxton',            lat:-34.47098, lng:140.57519, pc:'5333', berri:426,  renmark:104  },
+  { name:'Barmera',           lat:-34.23262, lng:140.47375, pc:'5345', berri:386,  renmark:137  },
+  { name:'Glossop',           lat:-34.28521, lng:140.54608, pc:'5344', berri:107,  renmark:37   },
+  { name:'Waikerie',          lat:-34.21552, lng:139.97711, pc:'5330', berri:103,  renmark:29   },
+  { name:'Monash',            lat:-34.20227, lng:140.57001, pc:'5342', berri:86,   renmark:50   },
+  { name:'Paringa',           lat:-34.17636, lng:140.77996, pc:'5340', berri:61,   renmark:169  },
+  { name:'Renmark West',      lat:-34.16527, lng:140.6973,  pc:'5341', berri:52,   renmark:140  },
+  { name:'Lyrup',             lat:-34.27098, lng:140.67275, pc:'5343', berri:46,   renmark:30   },
+  { name:'Loxton North',      lat:-34.41133, lng:140.61221, pc:'5333', berri:41,   renmark:14   },
+  { name:'Winkie',            lat:-34.32543, lng:140.55018, pc:'5343', berri:37,   renmark:12   },
+  { name:'Cobdogla',          lat:-34.23064, lng:140.40702, pc:'5346', berri:32,   renmark:11   },
+  { name:'Gerard',            lat:-34.36747, lng:140.49319, pc:'5341', berri:31,   renmark:9    },
+  { name:'Loveday',           lat:-34.29849, lng:140.43819, pc:'5345', berri:28,   renmark:8    },
+  { name:'Renmark North',     lat:-34.12271, lng:140.74642, pc:'5341', berri:27,   renmark:62   },
+  { name:'Renmark South',     lat:-34.21098, lng:140.72141, pc:'5341', berri:21,   renmark:62   },
+  { name:'Chaffey',           lat:-34.09283, lng:140.70798, pc:'5341', berri:20,   renmark:64   },
+  { name:'Lameroo',           lat:-35.3333,  lng:140.5167,  pc:'5302', berri:16,   renmark:19   },
+  { name:'Pinnaroo',          lat:-35.2667,  lng:140.9167,  pc:'5304', berri:15,   renmark:8    },
+  { name:'Kingston On Murray',lat:-34.21416, lng:140.32018, pc:'5331', berri:14,   renmark:6    },
+  { name:'Cooltong',          lat:-34.10108, lng:140.66831, pc:'5340', berri:14,   renmark:39   },
+  { name:'Bugle Hut',         lat:-34.4072,  lng:140.73975, pc:'5333', berri:12,   renmark:3    },
+  { name:'Paruna',            lat:-34.45,    lng:140.635,   pc:'5333', berri:12,   renmark:7    },
+  { name:'Gurra Gurra',       lat:-34.29424, lng:140.63748, pc:'5343', berri:11,   renmark:5    },
+  { name:'Crescent',          lat:-34.20645, lng:140.74508, pc:'5345', berri:9,    renmark:26   },
+  { name:'Murtho',            lat:-34.07414, lng:140.85317, pc:'5340', berri:8,    renmark:13   },
+  { name:'Old Calperum',      lat:-34.21221, lng:140.68443, pc:'5345', berri:8,    renmark:20   },
+  { name:'Moorook',           lat:-34.27652, lng:140.32462, pc:'5332', berri:8,    renmark:5    },
+  { name:'Cadell',            lat:-34.08973, lng:139.76643, pc:'5321', berri:8,    renmark:4    },
+  { name:'Bookpurnong',       lat:-34.35882, lng:140.60961, pc:'5333', berri:7,    renmark:0    },
+  { name:'Overland Corner',   lat:-34.14802, lng:140.34465, pc:'5345', berri:6,    renmark:0    },
+  { name:'Moorook South',     lat:-34.30613, lng:140.34853, pc:'5332', berri:6,    renmark:0    },
+  { name:'Morgan',            lat:-34.03406, lng:139.66796, pc:'5320', berri:6,    renmark:0    },
+  { name:'Blanchetown',       lat:-34.35175, lng:139.61171, pc:'5357', berri:3,    renmark:8    },
+  { name:'Pyap',              lat:-34.42967, lng:140.44533, pc:'5330', berri:3,    renmark:0    },
+  { name:'Lindsay Point',     lat:-34.0833,  lng:141.0,     pc:'5341', berri:0,    renmark:7    },
+  { name:'Pike River',        lat:-34.27154, lng:140.76303, pc:'5330', berri:0,    renmark:6    },
+  { name:'Alawoona',          lat:-34.74801, lng:140.46542, pc:'5332', berri:2,    renmark:2    },
+];
+
+const hourlyData = {
+  berri:   {
+    hours:  ['17','18','19','20','21','22','23','00','01','02','03','04','05','06'],
+    counts: [525, 435, 396, 356, 362, 290, 283, 209, 208, 199, 163, 153, 141, 197],
+    peaks:  ['17','18']
+  },
+  renmark: {
+    hours:  ['18','19','20','21','22','23','00','01','02','03','04','05','06','07'],
+    counts: [407, 386, 387, 276, 228, 241, 181, 150, 140, 148, 122, 142, 167, 223],
+    peaks:  ['18','19','20']
+  },
+};
+
+function buildBothHourly() {
+  const merged = {};
+  hourlyData.berri.hours.forEach((h,i)   => merged[h] = (merged[h]||0) + hourlyData.berri.counts[i]);
+  hourlyData.renmark.hours.forEach((h,i) => merged[h] = (merged[h]||0) + hourlyData.renmark.counts[i]);
+  const hours  = ['17','18','19','20','21','22','23','00','01','02','03','04','05','06','07'];
+  return { hours, counts: hours.map(h=>merged[h]||0), peaks:['17','18','19','20'] };
+}
+
+function renderChart(mode) {
+  const d = mode==='berri' ? hourlyData.berri : mode==='renmark' ? hourlyData.renmark : buildBothHourly();
+  const barColor = mode==='berri' ? '#e67e22' : mode==='renmark' ? '#8e44ad' : '#1a3a5c';
+  const subtitle = mode==='berri'   ? 'Berri window (1700–0700) · P1–P8' :
+                   mode==='renmark' ? 'Renmark window (1800–0800) · P1–P8' :
+                                      'Both windows combined · P1–P8';
+  document.getElementById('chart-subtitle').textContent = subtitle;
+
+  const maxVal = Math.max(...d.counts);
+  const barsEl   = document.getElementById('chart-bars');
+  const labelsEl = document.getElementById('chart-labels');
+  barsEl.innerHTML = ''; labelsEl.innerHTML = '';
+
+  d.hours.forEach((h,i) => {
+    const count = d.counts[i];
+    const heightPct = maxVal > 0 ? (count/maxVal)*100 : 0;
+    const isPeak = d.peaks.includes(h);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'chart-bar-wrap';
+
+    const bar = document.createElement('div');
+    bar.className = 'chart-bar';
+    bar.style.height = heightPct + '%';
+    bar.style.background = isPeak ? '#e74c3c' : barColor;
+    bar.style.opacity = isPeak ? '1' : '0.7';
+
+    const tip = document.createElement('div');
+    tip.className = 'chart-tip';
+    tip.textContent = h + ':00 — ' + count + ' jobs';
+    bar.appendChild(tip);
+
+    wrap.appendChild(bar);
+    barsEl.appendChild(wrap);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'chart-xlabel' + (isPeak ? ' peak' : '');
+    lbl.textContent = h;
+    labelsEl.appendChild(lbl);
+  });
+}
+
+const stations = [
+  { name:'Barmera',  lat:-34.23262, lng:140.47375, color:'#e74c3c' },
+  { name:'Berri',    lat:-34.27531, lng:140.6041,  color:'#e67e22' },
+  { name:'Renmark',  lat:-34.16292, lng:140.74997, color:'#8e44ad' },
+  { name:'Loxton',   lat:-34.47098, lng:140.57519, color:'#27ae60' },
+  { name:'Waikerie', lat:-34.21552, lng:139.97711, color:'#2980b9' },
+];
+
+const map = L.map('map', { center:[-34.28,140.25], zoom:9 });
+const streets   = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19});
+const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19});
+const topo      = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{attribution:'© OpenTopoMap',maxZoom:17});
+streets.addTo(map);
+L.control.layers({'🗺️ Street':streets,'🛰️ Satellite':satellite,'🏔️ Topo':topo},{},{position:'topleft'}).addTo(map);
+
+const ringLayers=[];
+let ringsVisible=false;
+function toggleRings() {
+  if(ringsVisible){
+    ringLayers.forEach(r=>map.removeLayer(r)); ringLayers.length=0; ringsVisible=false;
+    document.getElementById('btn-rings').classList.remove('active');
+  } else {
+    [[-34.27531,140.6041,'#e67e22'],[-34.16292,140.74997,'#8e44ad']].forEach(([la,ln,col])=>{
+      [15000,30000,45000].forEach((r,i)=>{
+        ringLayers.push(L.circle([la,ln],{radius:r,color:col,weight:1.5,fill:false,
+          opacity:[0.6,0.4,0.2][i],dashArray:[null,'6,4','3,6'][i]}).addTo(map));
+      });
+    });
+    ringsVisible=true;
+    document.getElementById('btn-rings').classList.add('active');
+  }
+}
+
+function buildHeat(mode) {
+  const pts=[]; const maxV=1725;
+  suburbs.forEach(s=>{
+    const count = mode==='berri' ? s.berri : mode==='renmark' ? s.renmark : s.berri+s.renmark;
+    if(!count) return;
+    const n=Math.min(Math.ceil(count/4),500);
+    const sc=0.012+(count/maxV)*0.025;
+    for(let i=0;i<n;i++) pts.push([s.lat+(Math.random()-0.5)*sc, s.lng+(Math.random()-0.5)*sc, count/maxV]);
+  });
+  return pts;
+}
+
+let heatLayer=null, circles=[];
+function renderMap(mode) {
+  if(heatLayer){map.removeLayer(heatLayer);heatLayer=null;}
+  circles.forEach(c=>map.removeLayer(c)); circles=[];
+  const grad = mode==='berri'
+    ? {0:'rgba(255,200,0,0)',0.3:'rgba(255,140,0,0.6)',0.7:'rgba(230,100,20,0.85)',1:'rgba(200,60,0,1)'}
+    : mode==='renmark'
+    ? {0:'rgba(200,80,255,0)',0.3:'rgba(150,40,200,0.6)',0.7:'rgba(110,10,160,0.85)',1:'rgba(70,0,120,1)'}
+    : {0:'rgba(0,80,200,0)',0.25:'rgba(0,60,170,0.55)',0.6:'rgba(20,40,120,0.8)',1:'rgba(10,20,80,1)'};
+  heatLayer=L.heatLayer(buildHeat(mode),{radius:32,blur:24,maxZoom:13,max:0.85,gradient:grad}).addTo(map);
+  suburbs.forEach(s=>{
+    const count = mode==='berri' ? s.berri : mode==='renmark' ? s.renmark : s.berri+s.renmark;
+    if(count<1) return;
+    const total=s.berri+s.renmark;
+    const radius=Math.max(5,Math.sqrt(count/2422)*58);
+    const fillColor = mode==='berri' ? '#e67e22' : mode==='renmark' ? '#8e44ad' : '#1a3a5c';
+    const c=L.circleMarker([s.lat,s.lng],{radius,color:'white',fillColor,fillOpacity:0.12,weight:1})
+      .addTo(map).bindPopup(`
+        <div style="font-family:Arial;min-width:195px;">
+          <b style="font-size:14px;">${s.name}</b>
+          <span style="color:#999;font-size:11px;margin-left:5px;">${s.pc}</span><br>
+          <div style="display:flex;gap:12px;margin-top:8px;">
+            <div style="text-align:center;"><div style="font-size:18px;font-weight:bold;color:#e67e22;">${s.berri}</div><div style="font-size:10px;color:#888;">Berri<br>1700–0700</div></div>
+            <div style="text-align:center;"><div style="font-size:18px;font-weight:bold;color:#8e44ad;">${s.renmark}</div><div style="font-size:10px;color:#888;">Renmark<br>1800–0800</div></div>
+            <div style="text-align:center;"><div style="font-size:18px;font-weight:bold;color:#1a3a5c;">${total}</div><div style="font-size:10px;color:#888;">Total<br>P1–P8</div></div>
+          </div>
+        </div>`);
+    circles.push(c);
+  });
+  ['both','berri','renmark'].forEach(m=>document.getElementById('grad-'+m).classList.toggle('active',m===mode));
+}
+
+stations.forEach(s=>{
+  L.circleMarker([s.lat,s.lng],{radius:10,color:'white',fillColor:s.color,fillOpacity:1,weight:2.5})
+    .addTo(map).bindPopup(`<b>🚑 ${s.name} Station</b>`);
+  L.marker([s.lat+0.02,s.lng],{icon:L.divIcon({
+    className:'',
+    html:`<div style="background:rgba(0,0,0,0.7);color:white;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:bold;white-space:nowrap;">${s.name}</div>`,
+    iconAnchor:[28,0]
+  })}).addTo(map);
+});
+
+const listEl=document.getElementById('suburb-list');
+[...suburbs].sort((a,b)=>(b.berri+b.renmark)-(a.berri+a.renmark)).forEach(s=>{
+  const total=s.berri+s.renmark; if(total<1) return;
+  const barW=Math.round((total/2422)*100);
+  const div=document.createElement('div');
+  div.className='sub-row';
+  div.onclick=()=>map.setView([s.lat,s.lng],13);
+  div.innerHTML=`
+    <div class="sub-top">
+      <span class="sub-name">${s.name} <span class="sub-pc">${s.pc}</span></span>
+      <span class="sub-tot">${total}</span>
+    </div>
+    <div class="sub-detail">
+      <span style="color:#e67e22;font-weight:bold;">Berri: ${s.berri}</span> &nbsp;·&nbsp;
+      <span style="color:#8e44ad;font-weight:bold;">Renmark: ${s.renmark}</span>
+    </div>
+    <div class="sub-bar-bg"><div class="sub-bar-fill" style="width:${barW}%;background:linear-gradient(to right,#e67e22,#8e44ad)"></div></div>`;
+  listEl.appendChild(div);
+});
+
+function setFilter(mode) {
+  renderMap(mode);
+  renderChart(mode);
+  ['both','berri','renmark'].forEach(m=>document.getElementById('btn-'+m).classList.toggle('active',m===mode));
+}
+
+renderMap('both');
+renderChart('both');
+</script>
+</body>
+</html>
